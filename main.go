@@ -18,8 +18,6 @@ import (
 	"github.com/docker/docker/pkg/archive"
 )
 
-var dockerRegistryUserID = ""
-
 type ErrorLine struct {
 	Error       string      `json:"error"`
 	ErrorDetail ErrorDetail `json:"errorDetail"`
