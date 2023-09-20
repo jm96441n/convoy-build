@@ -13,7 +13,7 @@ import (
 )
 
 const usage = `Usage of using_flag:
-  -c, --consul-location absolute filepath of consul source code on your system
+  -c, --consul-location absolute filepath of consul source code on your system, takes precedence over the CONVOY_CONSUL_LOCATION env var
   -e, --envoy-version version of envoy to use, defaults to 1.26
   -h, --help prints help information 
 `
@@ -56,12 +56,16 @@ func main() {
 }
 
 func parseArgs(consulLocation, envoyVersion *string) error {
-	flag.StringVar(consulLocation, "consul-location", "", "absolute filepath of consul source code on your system")
-	flag.StringVar(consulLocation, "c", "", "absolute filepath of consul source code on your system")
+	flag.StringVar(consulLocation, "consul-location", "", "absolute filepath of consul source code on your system, takes precedence over the CONVOY_CONSUL_LOCATION env var")
+	flag.StringVar(consulLocation, "c", "", "absolute filepath of consul source code on your system, takes precedence over the CONVOY_CONSUL_LOCATION env var")
 	flag.StringVar(envoyVersion, "envoy-version", "", "envoy version to use, defaults to 1.26")
 	flag.StringVar(envoyVersion, "e", "", "envoy version to use, defaults to 1.26")
 	flag.Usage = func() { fmt.Print(usage) }
 	flag.Parse()
+
+	if *consulLocation == "" {
+		*consulLocation = os.Getenv("CONVOY_CONSUL_LOCATION")
+	}
 
 	if *consulLocation == "" {
 		return errors.New("consul version must be supplied")
