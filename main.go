@@ -1,66 +1,81 @@
 package main
 
 import (
-	"bufio"
-	"context"
 	"embed"
-	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
-	"time"
-
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/archive"
+	"runtime"
 )
 
-type ErrorLine struct {
-	Error       string      `json:"error"`
-	ErrorDetail ErrorDetail `json:"errorDetail"`
-}
+const usage = `Usage of using_flag:
+  -c, --consul-location absolute filepath of consul source code on your system
+  -e, --envoy-version version of envoy to use, defaults to 1.26
+  -h, --help prints help information 
+`
 
 //go:embed embeddable
 var f embed.FS
 
-type ErrorDetail struct {
-	Message string `json:"message"`
-}
-
 func main() {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+	var consulLocation string
+	var envoyVersion string
 
-	consulLocation, err := exec.LookPath("consul")
-	if err != nil {
-		log.Fatal("could not find 'consul' on your path")
-	}
-
-	envoyLocation, err := exec.LookPath("envoy")
-	if err != nil {
-		log.Fatal("could not find 'envoy' on your path")
-	}
-
-	location, err := buildTempDir(consulLocation, envoyLocation)
+	err := parseArgs(&consulLocation, &envoyVersion)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = imageBuild(cli, location)
+	curDir, err := os.Getwd()
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		log.Fatal(err)
 	}
+
+	defer os.Chdir(curDir)
+
+	consulBytes, err := buildConsul(consulLocation, runtime.GOARCH, curDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dir, err := buildTempDir(consulBytes)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = buildDockerImage(dir, envoyVersion)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print("successfully built convoy image, it is available as \"convoy:local\"")
 }
 
-func buildTempDir(consulLocation, envoyLocation string) (string, error) {
+func parseArgs(consulLocation, envoyVersion *string) error {
+	flag.StringVar(consulLocation, "consul-location", "", "absolute filepath of consul source code on your system")
+	flag.StringVar(consulLocation, "c", "", "absolute filepath of consul source code on your system")
+	flag.StringVar(envoyVersion, "envoy-version", "", "envoy version to use, defaults to 1.26")
+	flag.StringVar(envoyVersion, "e", "", "envoy version to use, defaults to 1.26")
+	flag.Usage = func() { fmt.Print(usage) }
+	flag.Parse()
+
+	if *consulLocation == "" {
+		return errors.New("consul version must be supplied")
+	}
+
+	return nil
+}
+
+func buildTempDir(consulBytes []byte) (string, error) {
 	dir, err := os.MkdirTemp(os.TempDir(), "convoy-build")
+	if err != nil {
+		return "", err
+	}
+
 	entryFile, err := f.Open("embeddable/entrypoint.sh")
 	if err != nil {
 		return "", err
@@ -70,6 +85,7 @@ func buildTempDir(consulLocation, envoyLocation string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	entryFileDst, err := os.Create(fmt.Sprintf("%s/entrypoint.sh", dir))
 	if err != nil {
 		return "", err
@@ -91,22 +107,7 @@ func buildTempDir(consulLocation, envoyLocation string) (string, error) {
 		return "", err
 	}
 
-	consulBytes, err := os.ReadFile(consulLocation)
-	if err != nil {
-		return "", err
-	}
-
-	err = os.WriteFile(fmt.Sprintf("%s/consul", dir), consulBytes, 0777)
-	if err != nil {
-		return "", err
-	}
-
-	envoyBytes, err := os.ReadFile(envoyLocation)
-	if err != nil {
-		return "", err
-	}
-
-	err = os.WriteFile(fmt.Sprintf("%s/envoy", dir), envoyBytes, 0777)
+	err = os.WriteFile(fmt.Sprintf("%s/consul", dir), consulBytes, 0o777)
 	if err != nil {
 		return "", err
 	}
@@ -114,53 +115,47 @@ func buildTempDir(consulLocation, envoyLocation string) (string, error) {
 	return dir, nil
 }
 
-func imageBuild(dockerClient *client.Client, location string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
-	defer cancel()
+func buildConsul(consulLocation, goArch, curDir string) ([]byte, error) {
+	defer os.Chdir(curDir)
 
-	tar, err := archive.TarWithOptions(location, &archive.TarOptions{})
+	err := os.Chdir(consulLocation)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	opts := types.ImageBuildOptions{
-		Dockerfile: "Dockerfile",
-		Tags:       []string{"consul-envoy:local"},
-		Remove:     true,
-	}
-	res, err := dockerClient.ImageBuild(ctx, tar, opts)
+	log.Print("building consul")
+	cmd := exec.Command("make", "linux")
+	err = cmd.Run()
 	if err != nil {
-		return err
+		log.Print("failed to build consul")
+		return nil, err
 	}
 
-	defer res.Body.Close()
+	binLocation := fmt.Sprintf("%s/pkg/bin/linux_%s/consul", consulLocation, goArch)
 
-	err = print(res.Body)
+	consulBytes, err := os.ReadFile(binLocation)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return consulBytes, nil
 }
 
-func print(rd io.Reader) error {
-	var lastLine string
-
-	scanner := bufio.NewScanner(rd)
-	for scanner.Scan() {
-		lastLine = scanner.Text()
-		fmt.Println(scanner.Text())
+func buildDockerImage(dir, envoyVersion string) error {
+	err := os.Chdir(dir)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	errLine := &ErrorLine{}
-	json.Unmarshal([]byte(lastLine), errLine)
-	if errLine.Error != "" {
-		return errors.New(errLine.Error)
+	dockerBuildArgs := []string{"build", ".", "-t", "convoy:local"}
+	if envoyVersion != "" {
+		dockerBuildArgs = append(dockerBuildArgs[:1], append([]string{"--build-arg", fmt.Sprintf("ENVOY_VERSION=v%s-latest", envoyVersion)}, dockerBuildArgs[1:]...)...)
 	}
-
-	if err := scanner.Err(); err != nil {
+	cmd := exec.Command("docker", dockerBuildArgs...)
+	log.Print("building convoy image")
+	err = cmd.Run()
+	if err != nil {
 		return err
 	}
-
 	return nil
 }
