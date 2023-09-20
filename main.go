@@ -12,7 +12,7 @@ import (
 	"runtime"
 )
 
-const usage = `Usage of using_flag:
+const usage = `Usage of convoy-build:
   -c, --consul-location absolute filepath of consul source code on your system, takes precedence over the CONVOY_CONSUL_LOCATION env var
   -e, --envoy-version version of envoy to use, defaults to 1.26
   -h, --help prints help information 
