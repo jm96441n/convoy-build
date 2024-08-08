@@ -7,7 +7,7 @@ and envoy.
 
 Install via `go install`:
 ```
-go install github.com/jm96441n/convoy-build
+go install github.com/jm96441n/convoy-build@v1.0.0
 ```
 
 ## Running
@@ -19,6 +19,6 @@ precedence over the env var). You can also specify the envoy version used via th
 Full flag reference
 ```
   -c, --consul-location absolute filepath of consul source code on your system, takes precedence over the CONVOY_CONSUL_LOCATION env var
-  -e, --envoy-version version of envoy to use, defaults to 1.26
+  -e, --envoy-version version of envoy to use, defaults to 1.29
   -h, --help prints help information 
 ```
