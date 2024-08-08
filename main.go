@@ -68,7 +68,7 @@ func parseArgs(consulLocation, envoyVersion *string) error {
 	}
 
 	if *consulLocation == "" {
-		return errors.New("consul version must be supplied")
+		return errors.New("consul location must be supplied")
 	}
 
 	return nil
@@ -106,7 +106,6 @@ func buildTempDir(consulBytes []byte) (string, error) {
 	}
 
 	_, err = io.Copy(dockerfileDst, dockerFile)
-
 	if err != nil {
 		return "", err
 	}
