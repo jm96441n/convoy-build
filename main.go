@@ -14,7 +14,7 @@ import (
 
 const usage = `Usage of convoy-build:
   -c, --consul-location absolute filepath of consul source code on your system, takes precedence over the CONVOY_CONSUL_LOCATION env var
-  -e, --envoy-version version of envoy to use, defaults to 1.26
+  -e, --envoy-version version of envoy to use, defaults to 1.29
   -h, --help prints help information 
 `
 
@@ -58,8 +58,8 @@ func main() {
 func parseArgs(consulLocation, envoyVersion *string) error {
 	flag.StringVar(consulLocation, "consul-location", "", "absolute filepath of consul source code on your system, takes precedence over the CONVOY_CONSUL_LOCATION env var")
 	flag.StringVar(consulLocation, "c", "", "absolute filepath of consul source code on your system, takes precedence over the CONVOY_CONSUL_LOCATION env var")
-	flag.StringVar(envoyVersion, "envoy-version", "", "envoy version to use, defaults to 1.26")
-	flag.StringVar(envoyVersion, "e", "", "envoy version to use, defaults to 1.26")
+	flag.StringVar(envoyVersion, "envoy-version", "", "envoy version to use, defaults to 1.29")
+	flag.StringVar(envoyVersion, "e", "", "envoy version to use, defaults to 1.29")
 	flag.Usage = func() { fmt.Print(usage) }
 	flag.Parse()
 

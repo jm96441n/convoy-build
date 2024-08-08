@@ -1,15 +1,15 @@
-ARG ENVOY_VERSION=v1.26-latest
+ARG ENVOY_VERSION=v1.29-latest
 FROM envoyproxy/envoy:${ENVOY_VERSION}
 
 
 ENV CONSUL_HTTP_ADDR=http://localhost:8500
 
 RUN apt-get update && \
-    apt-get install -y \
-      bash \
-      curl \
-      jq && \
-    rm -rf /var/lib/apt/lists/*
+  apt-get install -y \
+  bash \
+  curl \
+  jq && \
+  rm -rf /var/lib/apt/lists/*
 
 COPY ./consul /bin/consul
 
